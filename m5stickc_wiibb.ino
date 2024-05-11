@@ -1,30 +1,10 @@
-//esp32_wiibb_oled.ino 2022/03/01
+// esp32_wiibb_oled.ino 2022/03/01
+// m5stickc_wiibb.ino 2023/8/26
 #include "Wiimote.h"
 #include <Wire.h>
-#include <Adafruit_GFX.h>
-#include <Adafruit_SSD1306.h>
-//#include <efontEnableJa.h> //プログラム使用率６２％
-#include <efontEnableJaMini.h> //プログラム使用率４４％
-#include <efont.h>
+#include <M5StickC.h>
 
-//#define EFONT_DEBUG　//デバッグ時コメント外す
 #define LED        2
-
-#define SCREEN_WIDTH 128 // OLED display width, in pixels
-#define SCREEN_HEIGHT 64 // OLED display height, in pixels
-#define OLED_RESET 5     //I2C NC
-#define SCREEN_ADDRESS 0x3c //Address 0x3C
-Adafruit_SSD1306 oled(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
-
-//ESP_8_BIT_GFX & SSD1306 カラーコード
-#define Black   SSD1306_BLACK
-#define Blue    SSD1306_WHITE
-#define Green   SSD1306_WHITE
-#define Cyan    SSD1306_WHITE
-#define Red     SSD1306_WHITE
-#define Magenta SSD1306_WHITE
-#define Yellow  SSD1306_WHITE
-#define White   SSD1306_WHITE
 
 Wiimote wiimote;
 char w_kg[10];
@@ -36,93 +16,19 @@ int cal=0;
 //**********************************************************************************************
 //文字列をビデオに表示する
 void disp(int16_t x,int16_t y,int16_t textsize,uint16_t color,String msg){
-  oled.setCursor(x, y);
-  oled.setTextSize(textsize);
-  oled.setTextColor(color);
-  oled.print(msg);
+  M5.Lcd.setCursor(x, y);
+  M5.Lcd.setTextSize(textsize);
+  M5.Lcd.setTextColor(color);
+  M5.Lcd.print(msg);
 }
-//efont 文字列をビデオに表示する
-//**********************************************************************************************
-void printEfont(int16_t x,int16_t y,int16_t txtsize,uint16_t color,uint16_t bgcolor,char *str) {
-  int posX = x;
-  int posY = y;
-  int16_t textsize = txtsize;
-  uint16_t textcolor = color;
-  uint16_t textbgcolor = bgcolor;
-  byte font[32];
-  while( *str != 0x00 ){
-    // 改行処理
-    if( *str == '\n' ){
-      // 改行
-      posY += 16 * textsize;
-      posX += 16 * textsize;
-      str++;
-      continue;
-    }
-    // フォント取得
-    uint16_t strUTF16;
-    str = efontUFT8toUTF16( &strUTF16, str );
-    getefontData( font, strUTF16 );
-    // 文字横幅
-    int width = 16 * textsize;
-    if( strUTF16 < 0x0100 ){
-      // 半角
-      width = 8 * textsize;
-    }
 
-#ifdef EFONT_DEBUG
-    Serial.printf( "str : U+%04X\n", strUTF16 );
-#endif
-
-    // 背景塗りつぶし
-    oled.fillRect(posX, posY, width, 16 * textsize, textbgcolor);
-    // 取得フォントの確認
-    for (uint8_t row = 0; row < 16; row++) {
-      word fontdata = font[row*2] * 256 + font[row*2+1];
-      for (uint8_t col = 0; col < 16; col++) {
-
-#ifdef EFONT_DEBUG
-        Serial.write( ( (0x8000 >> col) & fontdata ) ? "#" : " " );
-#endif
-
-        if( (0x8000 >> col) & fontdata ){
-          int drawX = posX + col * textsize;
-          int drawY = posY + row * textsize;
-          if( textsize == 1 ){
-            oled.drawPixel(drawX, drawY, textcolor);
-          } else {
-            oled.fillRect(drawX, drawY, textsize, textsize, textcolor);
-          }
-        }
-      }
-
-#ifdef EFONT_DEBUG
-        Serial.write( "\n" );
-#endif
-
-    }
-    // 描画カーソルを進める
-    posX += width;
-    // 折返し処理
-    if( SCREEN_WIDTH <= posX ){ 
-      posX = 0;
-      posY += 16 * textsize;
-    }
-  }
-  // カーソルを更新
-  oled.setCursor(posX, posY);
-}
-//**********************************************************************************************
-//四角形をビデオに表示する
-void Rect(int16_t x1,int16_t y1,int16_t x2,int16_t y2,uint16_t cl){
-  oled.drawFastVLine(x1,y1,y2-y1,cl);
-  oled.drawFastVLine(x2,y1,y2-y1,cl);
-  oled.drawFastHLine(x1,y1,x2-x1,cl);
-  oled.drawFastHLine(x1,y2,x2-x1,cl); 
-}
 
 //**********************************************************************************************
 void setup() {
+  // Initialize the M5StickC object
+  M5.begin();
+  M5.Lcd.setRotation(1);
+
   pinMode(LED, OUTPUT);
   Serial.begin(115200);
   while ( !Serial ) delay(100);
@@ -132,16 +38,11 @@ void setup() {
     digitalWrite(LED, LOW);
     delay(300);
   }
-  // SSD1306_SWITCHCAPVCC = 3.3Vから内部で表示電圧を生成
-  if(!oled.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
-    Serial.println(F("SSD1306 allocation failed"));
-    for(;;); //プログラムを停止します。
-  }
-  oled.display();//初期表示バッファの内容を画面に表示します
   wiimote.init(wiimote_callback);
  }
 //**********************************************************************************************
 void loop() {
+  M5.update();
   wiimote.handle();
   if (button_A) {
     w_off=total;
@@ -150,14 +51,12 @@ void loop() {
   wt=total-w_off;
   if (wt<0.5) wt=0.0;
   sprintf(w_kg,"%2.1f",wt);
-  oled.clearDisplay();  //画面をクリア
-  disp(1,2,1,Green,(String)"SSD1306 OLED & WiiBB");
-  printEfont(  8,15,3,Cyan,Black,(char *)w_kg);
-  printEfont(110,15,1,Cyan,Black,(char *)"kg");
-  if(!cal) printEfont(80,30,2,Cyan,Black,(char *)"CAL");
-  Rect(0,0,127,63,Yellow);//枠表示 
-  oled.display();
-  delay(10);
+  M5.Lcd.fillScreen(BLACK);   //画面をクリア
+  disp(1,2,1,GREEN ,(String)"M5StickC & WiiBB");
+  disp(  8,15,3,CYAN,(char *)w_kg);
+  disp(110,15,1,CYAN,(char *)"kg");
+  if(!cal) disp(80,30,2,CYAN,(char *)"CAL");
+  delay(100);
 }
 
 void wiimote_callback(wiimote_event_type_t event_type, uint16_t handle, uint8_t *data, size_t len) {
